@@ -10,7 +10,8 @@ class CBXR_API {
 		$place_id = get_option( 'cbxr_place_id', '' );
 
 		if ( empty( $api_key ) || empty( $place_id ) ) {
-			return new WP_Error( 'cbxr_missing_config', 'API key or Place ID not configured.' );
+			// Not an error during initial setup — just nothing to do yet.
+			return new WP_Error( 'cbxr_not_configured', '' );
 		}
 
 		$url = add_query_arg(
@@ -39,21 +40,28 @@ class CBXR_API {
 		return $body['result'];
 	}
 
-	public function search_places( $query ) {
-		$api_key = get_option( 'cbxr_api_key', '' );
+	/**
+	 * Search for places using the Text Search API (much better results than findplacefromtext).
+	 *
+	 * @param string $query   Search text.
+	 * @param string $api_key Optional API key (used before key is saved to DB).
+	 * @return array|WP_Error
+	 */
+	public function search_places( $query, $api_key = '' ) {
+		if ( empty( $api_key ) ) {
+			$api_key = get_option( 'cbxr_api_key', '' );
+		}
 
 		if ( empty( $api_key ) ) {
-			return new WP_Error( 'cbxr_missing_key', 'API key not configured.' );
+			return new WP_Error( 'cbxr_missing_key', 'Please enter your Google API Key first.' );
 		}
 
 		$url = add_query_arg(
 			array(
-				'input'     => $query,
-				'inputtype' => 'textquery',
-				'fields'    => 'place_id,name,formatted_address',
-				'key'       => $api_key,
+				'query' => $query,
+				'key'   => $api_key,
 			),
-			'https://maps.googleapis.com/maps/api/place/findplacefromtext/json'
+			'https://maps.googleapis.com/maps/api/place/textsearch/json'
 		);
 
 		$response = wp_remote_get( $url, array( 'timeout' => 15 ) );
@@ -64,19 +72,44 @@ class CBXR_API {
 
 		$body = json_decode( wp_remote_retrieve_body( $response ), true );
 
-		if ( ! isset( $body['candidates'] ) ) {
-			$error_msg = isset( $body['error_message'] ) ? $body['error_message'] : 'No results';
+		if ( isset( $body['status'] ) && 'OK' !== $body['status'] && 'ZERO_RESULTS' !== $body['status'] ) {
+			$error_msg = isset( $body['error_message'] ) ? $body['error_message'] : 'API error: ' . $body['status'];
 			return new WP_Error( 'cbxr_search_error', $error_msg );
 		}
 
-		return $body['candidates'];
+		if ( empty( $body['results'] ) ) {
+			return array();
+		}
+
+		// Normalize results to a consistent format.
+		$places = array();
+		foreach ( $body['results'] as $r ) {
+			$places[] = array(
+				'place_id'          => $r['place_id'] ?? '',
+				'name'              => $r['name'] ?? '',
+				'formatted_address' => $r['formatted_address'] ?? '',
+				'rating'            => $r['rating'] ?? null,
+				'user_ratings_total' => $r['user_ratings_total'] ?? null,
+				'lat'               => $r['geometry']['location']['lat'] ?? null,
+				'lng'               => $r['geometry']['location']['lng'] ?? null,
+			);
+		}
+
+		return $places;
 	}
 
+	/**
+	 * Refresh reviews: fetch from API and merge with existing cached reviews.
+	 * Silently skips if not yet configured (no error stored).
+	 */
 	public function refresh_reviews() {
 		$result = $this->fetch_reviews();
 
 		if ( is_wp_error( $result ) ) {
-			update_option( 'cbxr_last_error', $result->get_error_message() );
+			// Don't store an error for "not configured" — that's expected during setup.
+			if ( 'cbxr_not_configured' !== $result->get_error_code() ) {
+				update_option( 'cbxr_last_error', $result->get_error_message() );
+			}
 			return;
 		}
 

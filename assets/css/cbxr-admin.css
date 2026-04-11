@@ -4,10 +4,18 @@
 	max-width: 800px;
 }
 
+.cbxr-section-title {
+	margin-top: 32px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid #dcdcde;
+	font-size: 16px;
+	color: #1d2327;
+}
+
 .cbxr-status-card {
 	background: #fff;
 	border: 1px solid #c3c4c7;
-	border-left: 4px solid #2271b1;
+	border-left: 4px solid #00a32a;
 	padding: 16px 20px;
 	margin: 16px 0 24px;
 	border-radius: 2px;
@@ -31,24 +39,24 @@
 .cbxr-search-wrap {
 	display: flex;
 	gap: 8px;
-	margin-bottom: 12px;
+	margin-bottom: 4px;
 }
 
 #cbxr-search-results {
-	margin-top: 4px;
+	margin-top: 8px;
 }
 
 .cbxr-search-result {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 10px 14px;
+	padding: 12px 14px;
 	background: #f6f7f7;
 	border: 1px solid #dcdcde;
 	border-radius: 4px;
 	margin-bottom: 6px;
 	cursor: pointer;
-	transition: background 0.15s;
+	transition: background 0.15s, border-color 0.15s;
 }
 
 .cbxr-search-result:hover {
@@ -63,19 +71,51 @@
 .cbxr-search-result-name {
 	font-weight: 600;
 	display: block;
+	font-size: 14px;
 }
 
 .cbxr-search-result-addr {
 	font-size: 12px;
 	color: #888;
+	display: block;
+	margin-top: 2px;
+}
+
+.cbxr-search-result-rating {
+	font-size: 12px;
+	color: #e67e22;
+	display: block;
+	margin-top: 2px;
 }
 
 .cbxr-search-result-select {
-	font-size: 12px;
+	font-size: 13px;
 	color: #2271b1;
 	font-weight: 600;
 	flex-shrink: 0;
 	margin-left: 12px;
+}
+
+.cbxr-selected-place {
+	padding: 12px 14px;
+	background: #f0f6e8;
+	border: 1px solid #a3d468;
+	border-radius: 4px;
+}
+
+/* Map preview */
+#cbxr-map-preview {
+	max-width: 500px;
+}
+
+.cbxr-map-placeholder {
+	background: #f0f0f1;
+	border: 2px dashed #c3c4c7;
+	border-radius: 8px;
+	padding: 40px 20px;
+	text-align: center;
+	color: #888;
+	font-size: 13px;
 }
 
 #cbxr-refresh-status {

@@ -20,6 +20,17 @@ class CBXR_Admin {
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
 		add_action( 'wp_ajax_cbxr_search_places', array( $this, 'ajax_search_places' ) );
 		add_action( 'wp_ajax_cbxr_refresh_reviews', array( $this, 'ajax_refresh_reviews' ) );
+
+		// Clear stale errors when settings are saved.
+		add_action( 'update_option_cbxr_api_key', array( $this, 'on_settings_saved' ) );
+		add_action( 'update_option_cbxr_place_id', array( $this, 'on_settings_saved' ) );
+	}
+
+	/**
+	 * When settings are saved, clear any stale errors so the user gets a clean slate.
+	 */
+	public function on_settings_saved() {
+		delete_option( 'cbxr_last_error' );
 	}
 
 	public function add_menu() {
@@ -76,13 +87,15 @@ class CBXR_Admin {
 			wp_send_json_error( 'Unauthorized' );
 		}
 
-		$query = isset( $_POST['query'] ) ? sanitize_text_field( wp_unslash( $_POST['query'] ) ) : '';
+		$query   = isset( $_POST['query'] ) ? sanitize_text_field( wp_unslash( $_POST['query'] ) ) : '';
+		$api_key = isset( $_POST['api_key'] ) ? sanitize_text_field( wp_unslash( $_POST['api_key'] ) ) : '';
+
 		if ( empty( $query ) ) {
-			wp_send_json_error( 'Empty search query' );
+			wp_send_json_error( 'Enter a business name to search.' );
 		}
 
 		$api    = new CBXR_API();
-		$result = $api->search_places( $query );
+		$result = $api->search_places( $query, $api_key );
 
 		if ( is_wp_error( $result ) ) {
 			wp_send_json_error( $result->get_error_message() );
@@ -137,7 +150,7 @@ class CBXR_Admin {
 			<h1>CHIROBASIX Google Reviews Widget</h1>
 
 			<?php if ( ! empty( $last_error ) ) : ?>
-				<div class="notice notice-error"><p><strong>Last Error:</strong> <?php echo esc_html( $last_error ); ?></p></div>
+				<div class="notice notice-error is-dismissible"><p><strong>Error:</strong> <?php echo esc_html( $last_error ); ?></p></div>
 			<?php endif; ?>
 
 			<?php if ( ! empty( $place_name ) && ! empty( $rating ) ) : ?>
@@ -159,6 +172,7 @@ class CBXR_Admin {
 			<form method="post" action="options.php">
 				<?php settings_fields( 'cbxr_settings' ); ?>
 
+				<h2 class="cbxr-section-title">1. Connect to Google</h2>
 				<table class="form-table">
 					<tr>
 						<th scope="row"><label for="cbxr_api_key">Google API Key</label></th>
@@ -171,14 +185,18 @@ class CBXR_Admin {
 							</p>
 						</td>
 					</tr>
+				</table>
 
+				<h2 class="cbxr-section-title">2. Find Your Business</h2>
+				<table class="form-table">
 					<tr>
-						<th scope="row"><label>Find Your Business</label></th>
+						<th scope="row"><label>Search</label></th>
 						<td>
 							<div class="cbxr-search-wrap">
-								<input type="text" id="cbxr-place-search" placeholder="Search for your business..." class="regular-text" />
-								<button type="button" class="button" id="cbxr-search-btn">Search</button>
+								<input type="text" id="cbxr-place-search" placeholder="e.g. Tri-States Chiropractic Dubuque" class="regular-text" />
+								<button type="button" class="button button-primary" id="cbxr-search-btn">Search</button>
 							</div>
+							<p class="description">Enter the business name and city. Uses your API key from above (no need to save first).</p>
 							<div id="cbxr-search-results"></div>
 						</td>
 					</tr>
@@ -192,6 +210,26 @@ class CBXR_Admin {
 						</td>
 					</tr>
 
+					<tr>
+						<th scope="row">Map Preview</th>
+						<td>
+							<div id="cbxr-map-preview">
+								<?php if ( ! empty( $place_id ) && ! empty( $api_key ) ) : ?>
+									<iframe
+										width="100%" height="250" style="border:0; border-radius:8px;"
+										loading="lazy" referrerpolicy="no-referrer-when-downgrade"
+										src="https://www.google.com/maps/embed/v1/place?key=<?php echo esc_attr( $api_key ); ?>&q=place_id:<?php echo esc_attr( $place_id ); ?>">
+									</iframe>
+								<?php else : ?>
+									<div class="cbxr-map-placeholder">Select a business above to see the map preview.</div>
+								<?php endif; ?>
+							</div>
+						</td>
+					</tr>
+				</table>
+
+				<h2 class="cbxr-section-title">3. Customize Widget</h2>
+				<table class="form-table">
 					<tr>
 						<th scope="row"><label for="cbxr_header_text">Header Text</label></th>
 						<td>
