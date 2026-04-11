@@ -1,0 +1,101 @@
+/* CHIROBASIX Google Reviews Widget - Admin Styles */
+
+.cbxr-admin-wrap {
+	max-width: 800px;
+}
+
+.cbxr-status-card {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-left: 4px solid #2271b1;
+	padding: 16px 20px;
+	margin: 16px 0 24px;
+	border-radius: 2px;
+}
+
+.cbxr-status-card h3 {
+	margin: 0 0 6px;
+	font-size: 16px;
+}
+
+.cbxr-status-card p {
+	margin: 0 0 8px;
+	color: #50575e;
+}
+
+.cbxr-status-card .cbxr-meta {
+	font-size: 12px;
+	color: #999;
+}
+
+.cbxr-search-wrap {
+	display: flex;
+	gap: 8px;
+	margin-bottom: 12px;
+}
+
+#cbxr-search-results {
+	margin-top: 4px;
+}
+
+.cbxr-search-result {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 10px 14px;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	margin-bottom: 6px;
+	cursor: pointer;
+	transition: background 0.15s;
+}
+
+.cbxr-search-result:hover {
+	background: #e8f0fe;
+	border-color: #2271b1;
+}
+
+.cbxr-search-result-info {
+	flex: 1;
+}
+
+.cbxr-search-result-name {
+	font-weight: 600;
+	display: block;
+}
+
+.cbxr-search-result-addr {
+	font-size: 12px;
+	color: #888;
+}
+
+.cbxr-search-result-select {
+	font-size: 12px;
+	color: #2271b1;
+	font-weight: 600;
+	flex-shrink: 0;
+	margin-left: 12px;
+}
+
+#cbxr-refresh-status {
+	margin-left: 8px;
+	font-size: 13px;
+	color: #50575e;
+}
+
+.cbxr-spinner {
+	display: inline-block;
+	width: 16px;
+	height: 16px;
+	border: 2px solid #ccc;
+	border-top-color: #2271b1;
+	border-radius: 50%;
+	animation: cbxr-spin 0.6s linear infinite;
+	vertical-align: middle;
+	margin-right: 4px;
+}
+
+@keyframes cbxr-spin {
+	to { transform: rotate(360deg); }
+}
