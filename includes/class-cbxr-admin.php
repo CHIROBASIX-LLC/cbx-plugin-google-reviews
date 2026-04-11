@@ -27,10 +27,18 @@ class CBXR_Admin {
 	}
 
 	/**
-	 * When settings are saved, clear any stale errors so the user gets a clean slate.
+	 * When settings are saved, clear errors and auto-fetch reviews if configured.
 	 */
 	public function on_settings_saved() {
 		delete_option( 'cbxr_last_error' );
+
+		// Auto-fetch reviews when Place ID is saved for the first time (or changed).
+		$api_key  = get_option( 'cbxr_api_key', '' );
+		$place_id = get_option( 'cbxr_place_id', '' );
+		if ( ! empty( $api_key ) && ! empty( $place_id ) ) {
+			$api = new CBXR_API();
+			$api->refresh_reviews();
+		}
 	}
 
 	public function add_menu() {
@@ -153,14 +161,19 @@ class CBXR_Admin {
 				<div class="notice notice-error is-dismissible"><p><strong>Error:</strong> <?php echo esc_html( $last_error ); ?></p></div>
 			<?php endif; ?>
 
-			<?php if ( ! empty( $place_name ) && ! empty( $rating ) ) : ?>
+			<?php if ( ! empty( $place_id ) ) : ?>
 				<div class="cbxr-status-card">
-					<h3><?php echo esc_html( $place_name ); ?></h3>
-					<p>
-						<strong><?php echo esc_html( $rating ); ?></strong> stars &bull;
-						<?php echo esc_html( $review_count ); ?> total reviews on Google &bull;
-						<?php echo esc_html( $cached_count ); ?> reviews cached
-					</p>
+					<?php if ( ! empty( $place_name ) ) : ?>
+						<h3><?php echo esc_html( $place_name ); ?></h3>
+						<p>
+							<strong><?php echo esc_html( $rating ); ?></strong> stars &bull;
+							<?php echo esc_html( $review_count ); ?> total reviews on Google &bull;
+							<?php echo esc_html( $cached_count ); ?> reviews cached
+						</p>
+					<?php else : ?>
+						<h3>Place ID configured</h3>
+						<p>Click "Refresh Reviews Now" to pull in reviews from Google.</p>
+					<?php endif; ?>
 					<?php if ( $last_refresh ) : ?>
 						<p class="cbxr-meta">Last refreshed: <?php echo esc_html( $last_refresh ); ?></p>
 					<?php endif; ?>
