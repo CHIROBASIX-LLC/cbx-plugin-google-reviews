@@ -53,7 +53,7 @@ class CBXR_Widget {
 		$position     = get_option( 'cbxr_widget_position', 'bottom-left' );
 		$header_text  = get_option( 'cbxr_header_text', 'What our patients say...' );
 		$cta_text     = get_option( 'cbxr_cta_text', 'Review us on Google' );
-		$accent_color = get_option( 'cbxr_accent_color', '#e8a87c' );
+		$accent_color = get_option( 'cbxr_accent_color', '#ffffff' );
 
 		$review_url = $url ? $url : 'https://search.google.com/local/writereview?placeid=' . urlencode( $place_id );
 
@@ -69,7 +69,7 @@ class CBXR_Widget {
 			<!-- Floating Badge -->
 			<button id="cbxr-badge" class="cbxr-badge" aria-label="Open Google Reviews">
 				<span class="cbxr-badge-rating"><?php echo esc_html( number_format( (float) $rating, 1 ) ); ?></span>
-				<span class="cbxr-badge-stars"><?php echo $this->render_stars( (float) $rating ); ?></span>
+				<span class="cbxr-badge-stars"><?php echo $this->render_stars( (float) $rating, 22 ); ?></span>
 				<span class="cbxr-badge-count"><?php echo esc_html( $count ); ?> reviews</span>
 			</button>
 
@@ -116,6 +116,61 @@ class CBXR_Widget {
 			<div id="cbxr-overlay" class="cbxr-overlay"></div>
 		</div>
 		<?php
+		$this->render_schema( $name, $rating, $count, $url, $place_id, $reviews );
+	}
+
+	private function render_schema( $name, $rating, $count, $url, $place_id, $reviews ) {
+		if ( empty( $name ) || empty( $rating ) ) {
+			return;
+		}
+
+		$schema = array(
+			'@context'       => 'https://schema.org',
+			'@type'          => 'LocalBusiness',
+			'name'           => $name,
+			'aggregateRating' => array(
+				'@type'       => 'AggregateRating',
+				'ratingValue' => number_format( (float) $rating, 1 ),
+				'bestRating'  => '5',
+				'worstRating' => '1',
+				'reviewCount' => (int) $count,
+			),
+		);
+
+		if ( ! empty( $url ) ) {
+			$schema['url'] = $url;
+		}
+
+		if ( ! empty( $reviews ) ) {
+			$schema['review'] = array();
+			foreach ( $reviews as $review ) {
+				$r = array(
+					'@type'        => 'Review',
+					'author'       => array(
+						'@type' => 'Person',
+						'name'  => isset( $review['author_name'] ) ? $review['author_name'] : 'Anonymous',
+					),
+					'reviewRating' => array(
+						'@type'      => 'Rating',
+						'ratingValue' => isset( $review['rating'] ) ? (int) $review['rating'] : 5,
+						'bestRating'  => '5',
+						'worstRating' => '1',
+					),
+				);
+
+				if ( ! empty( $review['text'] ) ) {
+					$r['reviewBody'] = $review['text'];
+				}
+
+				if ( ! empty( $review['time'] ) ) {
+					$r['datePublished'] = gmdate( 'Y-m-d', (int) $review['time'] );
+				}
+
+				$schema['review'][] = $r;
+			}
+		}
+
+		echo '<script type="application/ld+json">' . wp_json_encode( $schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . '</script>' . "\n";
 	}
 
 	private function render_review_card( $review ) {
@@ -165,15 +220,15 @@ class CBXR_Widget {
 		<?php
 	}
 
-	private function render_stars( $rating ) {
+	private function render_stars( $rating, $size = 18 ) {
 		$output = '';
 		for ( $i = 1; $i <= 5; $i++ ) {
 			if ( $i <= floor( $rating ) ) {
-				$output .= '<svg class="cbxr-star cbxr-star-full" width="18" height="18" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="#F4B400"/></svg>';
+				$output .= '<svg class="cbxr-star cbxr-star-full" width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="#F4B400"/></svg>';
 			} elseif ( $i - $rating < 1 ) {
-				$output .= '<svg class="cbxr-star cbxr-star-half" width="18" height="18" viewBox="0 0 24 24"><defs><linearGradient id="cbxr-half-' . $i . '"><stop offset="50%" stop-color="#F4B400"/><stop offset="50%" stop-color="#DAD9D6"/></linearGradient></defs><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="url(#cbxr-half-' . $i . ')"/></svg>';
+				$output .= '<svg class="cbxr-star cbxr-star-half" width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24"><defs><linearGradient id="cbxr-half-' . $i . '"><stop offset="50%" stop-color="#F4B400"/><stop offset="50%" stop-color="#DAD9D6"/></linearGradient></defs><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="url(#cbxr-half-' . $i . ')"/></svg>';
 			} else {
-				$output .= '<svg class="cbxr-star cbxr-star-empty" width="18" height="18" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="#DAD9D6"/></svg>';
+				$output .= '<svg class="cbxr-star cbxr-star-empty" width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="#DAD9D6"/></svg>';
 			}
 		}
 		return $output;

@@ -101,8 +101,8 @@
 }
 
 #cbxr-widget .cbxr-badge-stars svg {
-	width: 18px !important;
-	height: 18px !important;
+	width: 22px !important;
+	height: 22px !important;
 }
 
 #cbxr-widget .cbxr-badge-count {
@@ -142,13 +142,13 @@
 
 #cbxr-widget.cbxr-pos-left .cbxr-panel {
 	left: 0 !important;
-	border-right: 4px solid var(--cbxr-accent, #e8a87c) !important;
+	border-right: 4px solid var(--cbxr-accent, #ffffff) !important;
 }
 
 #cbxr-widget.cbxr-pos-right .cbxr-panel {
 	right: 0 !important;
 	left: auto !important;
-	border-left: 4px solid var(--cbxr-accent, #e8a87c) !important;
+	border-left: 4px solid var(--cbxr-accent, #ffffff) !important;
 	border-right: none !important;
 	transform: translateX(100%) !important;
 	box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12) !important;

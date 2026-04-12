@@ -74,7 +74,7 @@ class CBXR_Admin {
 		));
 		register_setting( 'cbxr_settings', 'cbxr_accent_color', array(
 			'sanitize_callback' => 'sanitize_hex_color',
-			'default'           => '#e8a87c',
+			'default'           => '#ffffff',
 		));
 	}
 
@@ -183,7 +183,7 @@ class CBXR_Admin {
 		$position     = get_option( 'cbxr_widget_position', 'bottom-left' );
 		$header_text  = get_option( 'cbxr_header_text', 'What our patients say...' );
 		$cta_text     = get_option( 'cbxr_cta_text', 'Review us on Google' );
-		$accent_color = get_option( 'cbxr_accent_color', '#e8a87c' );
+		$accent_color = get_option( 'cbxr_accent_color', '#ffffff' );
 		?>
 		<div class="wrap cbxr-admin-wrap">
 			<h1>CHIROBASIX Google Reviews Widget</h1>
@@ -327,9 +327,9 @@ class CBXR_Admin {
 					<tr>
 						<th scope="row"><label for="cbxr_accent_color">Accent Color</label></th>
 						<td>
-							<input type="color" id="cbxr_accent_color" name="cbxr_accent_color"
-								value="<?php echo esc_attr( $accent_color ); ?>" />
-							<span class="description">Left border accent on the slide-out panel.</span>
+							<input type="text" id="cbxr_accent_color" name="cbxr_accent_color"
+								value="<?php echo esc_attr( $accent_color ); ?>" class="regular-text" placeholder="#ffffff" />
+							<span class="description">HEX color code for the left border accent on the slide-out panel.</span>
 						</td>
 					</tr>
 				</table>
