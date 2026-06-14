@@ -31,7 +31,7 @@ function cbxr_init() {
 	CBXR_Widget::instance();
 
 	// GitHub auto-updater: checks for new releases and enables one-click updates.
-	new CBXR_Updater( __FILE__, 'chirobasix', 'cbx-google-reviews' );
+	new CBXR_Updater( __FILE__, 'CHIROBASIX-LLC', 'cbx-google-reviews' );
 }
 add_action( 'plugins_loaded', 'cbxr_init' );
 
