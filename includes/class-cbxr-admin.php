@@ -53,8 +53,8 @@ class CBXR_Admin {
 	}
 
 	public function register_settings() {
-		register_setting( 'cbxr_settings', 'cbxr_api_key', array( 'sanitize_callback' => 'sanitize_text_field' ) );
-		register_setting( 'cbxr_settings', 'cbxr_outscraper_key', array( 'sanitize_callback' => 'sanitize_text_field' ) );
+		register_setting( 'cbxr_settings', 'cbxr_api_key', array( 'sanitize_callback' => 'cbxr_sanitize_google_key' ) );
+		register_setting( 'cbxr_settings', 'cbxr_outscraper_key', array( 'sanitize_callback' => 'cbxr_sanitize_outscraper_key' ) );
 		register_setting( 'cbxr_settings', 'cbxr_place_id', array( 'sanitize_callback' => 'sanitize_text_field' ) );
 		register_setting( 'cbxr_settings', 'cbxr_min_rating', array(
 			'sanitize_callback' => 'absint',
@@ -169,8 +169,14 @@ class CBXR_Admin {
 	}
 
 	public function render_settings_page() {
-		$api_key        = get_option( 'cbxr_api_key', '' );
-		$outscraper_key = get_option( 'cbxr_outscraper_key', '' );
+		$api_key          = get_option( 'cbxr_api_key', '' );
+		$outscraper_key   = get_option( 'cbxr_outscraper_key', '' );
+		$google_const     = cbxr_key_from_constant( 'google' );
+		$outscraper_const = cbxr_key_from_constant( 'outscraper' );
+		$has_google_key   = $google_const || '' !== $api_key;
+		// Placeholders prove a key is saved WITHOUT printing it into the page source.
+		$google_ph     = $google_const ? 'Set in wp-config.php (CBXR_GOOGLE_API_KEY)' : ( '' !== $api_key ? 'Saved key ending ••••' . substr( $api_key, -4 ) . ' — leave blank to keep' : 'AIza...' );
+		$outscraper_ph = $outscraper_const ? 'Set in wp-config.php (CBXR_OUTSCRAPER_KEY)' : ( '' !== $outscraper_key ? 'Saved key ending ••••' . substr( $outscraper_key, -4 ) . ' — leave blank to keep' : 'Outscraper API key' );
 		$place_id       = get_option( 'cbxr_place_id', '' );
 		$place_name     = get_option( 'cbxr_place_name', '' );
 		$rating       = get_option( 'cbxr_rating', '' );
@@ -223,7 +229,9 @@ class CBXR_Admin {
 						<th scope="row"><label for="cbxr_api_key">Google API Key</label></th>
 						<td>
 							<input type="password" id="cbxr_api_key" name="cbxr_api_key"
-								value="<?php echo esc_attr( $api_key ); ?>" class="regular-text" autocomplete="off" />
+								value="" class="regular-text" autocomplete="off"
+								<?php disabled( $google_const ); ?>
+								placeholder="<?php echo esc_attr( $google_ph ); ?>" />
 							<p class="description">
 								Requires Places API enabled.
 								<a href="https://console.cloud.google.com/apis/library/places-backend.googleapis.com" target="_blank" rel="noopener">Enable it here</a>.
@@ -235,7 +243,9 @@ class CBXR_Admin {
 						<th scope="row"><label for="cbxr_outscraper_key">Outscraper API Key</label></th>
 						<td>
 							<input type="password" id="cbxr_outscraper_key" name="cbxr_outscraper_key"
-								value="<?php echo esc_attr( $outscraper_key ); ?>" class="regular-text" autocomplete="off" />
+								value="" class="regular-text" autocomplete="off"
+								<?php disabled( $outscraper_const ); ?>
+								placeholder="<?php echo esc_attr( $outscraper_ph ); ?>" />
 							<p class="description">
 								Fetches up to 200 reviews per location. First 500 reviews free.
 								<a href="https://outscraper.com/" target="_blank" rel="noopener">Get a key here</a>.
@@ -271,7 +281,7 @@ class CBXR_Admin {
 						<th scope="row">Map Preview</th>
 						<td>
 							<div id="cbxr-map-preview">
-								<?php if ( ! empty( $place_id ) && ! empty( $api_key ) ) : ?>
+								<?php if ( ! empty( $place_id ) && $has_google_key ) : ?>
 									<iframe
 										width="100%" height="250" style="border:0; border-radius:8px;"
 										loading="lazy" referrerpolicy="no-referrer-when-downgrade"

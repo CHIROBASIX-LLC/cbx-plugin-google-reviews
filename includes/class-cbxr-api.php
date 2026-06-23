@@ -6,7 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class CBXR_API {
 
 	public function fetch_reviews() {
-		$api_key  = get_option( 'cbxr_api_key', '' );
+		$api_key  = cbxr_get_google_key();
 		$place_id = get_option( 'cbxr_place_id', '' );
 
 		if ( empty( $api_key ) || empty( $place_id ) ) {
@@ -50,7 +50,7 @@ class CBXR_API {
 		$place_id = get_option( 'cbxr_place_id', '' );
 
 		if ( empty( $outscraper_key ) ) {
-			$outscraper_key = get_option( 'cbxr_outscraper_key', '' );
+			$outscraper_key = cbxr_get_outscraper_key();
 		}
 
 		if ( empty( $outscraper_key ) || empty( $place_id ) ) {
@@ -160,7 +160,7 @@ class CBXR_API {
 
 	public function search_places( $query, $api_key = '' ) {
 		if ( empty( $api_key ) ) {
-			$api_key = get_option( 'cbxr_api_key', '' );
+			$api_key = cbxr_get_google_key();
 		}
 
 		if ( empty( $api_key ) ) {
