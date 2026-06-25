@@ -64,6 +64,20 @@ class CBXR_Widget {
 		$is_right = ( 'bottom-right' === $position );
 		$pos_class = $is_right ? 'cbxr-pos-right' : 'cbxr-pos-left';
 		?>
+		<style id="cbxr-critical-css">
+		/* Critical positioning, inlined so it applies at first paint even when the main stylesheet is
+		   deferred (e.g. WP Rocket Remove Unused CSS / async). Without this the panel flashes un-hidden
+		   in normal flow below the footer until the deferred CSS loads. */
+		#cbxr-widget .cbxr-badge{position:fixed!important;bottom:20px!important;z-index:999998!important}
+		#cbxr-widget.cbxr-pos-left .cbxr-badge{left:20px!important}
+		#cbxr-widget.cbxr-pos-right .cbxr-badge{right:20px!important}
+		#cbxr-widget .cbxr-panel{position:fixed!important;top:0!important;bottom:0!important;width:340px!important;z-index:999999!important;transform:translateX(-100%)!important}
+		#cbxr-widget.cbxr-pos-left .cbxr-panel{left:0!important}
+		#cbxr-widget.cbxr-pos-right .cbxr-panel{right:0!important;left:auto!important;transform:translateX(100%)!important}
+		#cbxr-widget.cbxr-open .cbxr-panel{transform:translateX(0)!important}
+		#cbxr-widget .cbxr-overlay{position:fixed!important;inset:0!important;z-index:999997!important;opacity:0!important;pointer-events:none!important}
+		#cbxr-widget.cbxr-open .cbxr-overlay{opacity:1!important;pointer-events:auto!important}
+		</style>
 		<div id="cbxr-widget" class="<?php echo esc_attr( $pos_class ); ?>" style="--cbxr-accent: <?php echo esc_attr( $accent_color ); ?>;">
 
 			<!-- Floating Badge -->
@@ -137,7 +151,44 @@ class CBXR_Widget {
 			),
 		);
 
-		if ( ! empty( $url ) ) {
+		// Business identity fields — Google requires `address` on any LocalBusiness that carries
+		// ratings/reviews; without it the item is flagged invalid. NAP persisted from Place Details.
+		$address = get_option( 'cbxr_place_address', '' );
+		if ( ! empty( $address ) ) {
+			$schema['address'] = $this->parse_postal_address( $address );
+		}
+		$telephone = get_option( 'cbxr_place_phone', '' );
+		if ( ! empty( $telephone ) ) {
+			$schema['telephone'] = $telephone;
+		}
+		$geo = get_option( 'cbxr_place_geo', '' );
+		if ( ! empty( $geo ) && false !== strpos( $geo, ',' ) ) {
+			list( $lat, $lng ) = array_map( 'trim', explode( ',', $geo, 2 ) );
+			if ( '' !== $lat && '' !== $lng ) {
+				$schema['geo'] = array(
+					'@type'     => 'GeoCoordinates',
+					'latitude'  => $lat,
+					'longitude' => $lng,
+				);
+			}
+		}
+		$image = get_option( 'cbxr_place_image', '' );
+		if ( empty( $image ) && function_exists( 'get_site_icon_url' ) ) {
+			$image = get_site_icon_url( 512 );
+		}
+		if ( ! empty( $image ) ) {
+			$schema['image'] = $image;
+		}
+		$price_range = get_option( 'cbxr_price_range', '$$' );
+		if ( ! empty( $price_range ) ) {
+			$schema['priceRange'] = $price_range;
+		}
+
+		// Prefer the business's own website for `url`; fall back to the Google Maps URL.
+		$site_url = home_url( '/' );
+		if ( ! empty( $site_url ) ) {
+			$schema['url'] = $site_url;
+		} elseif ( ! empty( $url ) ) {
 			$schema['url'] = $url;
 		}
 
@@ -170,7 +221,45 @@ class CBXR_Widget {
 			}
 		}
 
+		/**
+		 * Filter the reviews-widget LocalBusiness schema before output.
+		 *
+		 * @param array  $schema   Assembled schema array.
+		 * @param string $place_id Google place id.
+		 */
+		$schema = apply_filters( 'cbxr_schema', $schema, $place_id );
+
 		echo '<script type="application/ld+json">' . wp_json_encode( $schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . '</script>' . "\n";
+	}
+
+	/**
+	 * Parse a Google formatted_address string into a schema.org PostalAddress.
+	 * e.g. "36 14th Ave NE Ste 101, Hickory, NC 28601, USA".
+	 *
+	 * @param string $formatted Formatted address.
+	 * @return array|string PostalAddress array, or the raw string if it can't be parsed.
+	 */
+	private function parse_postal_address( $formatted ) {
+		$parts = array_values( array_filter( array_map( 'trim', explode( ',', $formatted ) ), 'strlen' ) );
+		$addr  = array( '@type' => 'PostalAddress' );
+
+		if ( $parts && preg_match( '/^(USA|United States|US)$/i', end( $parts ) ) ) {
+			$addr['addressCountry'] = 'US';
+			array_pop( $parts );
+		}
+		if ( $parts && preg_match( '/^([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/', end( $parts ), $m ) ) {
+			$addr['addressRegion'] = strtoupper( $m[1] );
+			$addr['postalCode']    = $m[2];
+			array_pop( $parts );
+		}
+		if ( $parts ) {
+			$addr['addressLocality'] = array_pop( $parts );
+		}
+		if ( $parts ) {
+			$addr['streetAddress'] = implode( ', ', $parts );
+		}
+
+		return ( count( $addr ) > 1 ) ? $addr : $formatted;
 	}
 
 	private function render_review_card( $review ) {

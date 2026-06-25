@@ -16,7 +16,7 @@ class CBXR_API {
 		$url = add_query_arg(
 			array(
 				'place_id'     => $place_id,
-				'fields'       => 'name,rating,user_ratings_total,reviews,url',
+				'fields'       => 'name,rating,user_ratings_total,reviews,url,formatted_address,formatted_phone_number,international_phone_number,geometry',
 				'key'          => $api_key,
 				'reviews_sort' => 'newest',
 			),
@@ -232,6 +232,18 @@ class CBXR_API {
 		}
 		if ( isset( $result['url'] ) ) {
 			update_option( 'cbxr_place_url', $result['url'] );
+		}
+		// Persist NAP from Place Details so the LocalBusiness schema stays valid (Google requires `address`).
+		if ( ! empty( $result['formatted_address'] ) ) {
+			update_option( 'cbxr_place_address', $result['formatted_address'] );
+		}
+		if ( ! empty( $result['formatted_phone_number'] ) ) {
+			update_option( 'cbxr_place_phone', $result['formatted_phone_number'] );
+		} elseif ( ! empty( $result['international_phone_number'] ) ) {
+			update_option( 'cbxr_place_phone', $result['international_phone_number'] );
+		}
+		if ( isset( $result['geometry']['location']['lat'], $result['geometry']['location']['lng'] ) ) {
+			update_option( 'cbxr_place_geo', $result['geometry']['location']['lat'] . ',' . $result['geometry']['location']['lng'] );
 		}
 
 		$new_reviews = isset( $result['reviews'] ) ? $result['reviews'] : array();
