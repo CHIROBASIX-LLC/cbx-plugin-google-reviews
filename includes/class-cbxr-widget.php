@@ -237,6 +237,14 @@ class CBXR_Widget {
 		 */
 		$schema = apply_filters( 'cbxr_schema', $schema, $place_id );
 
+		// Google/SEMRush flag a LocalBusiness carrying a rating but no address as INVALID. If a valid
+		// address is not available (e.g. Place Details NAP not yet persisted, or cleared during a
+		// refresh gap), skip the schema entirely rather than emit an invalid item. A site can supply
+		// an address via the `cbxr_schema` filter above to keep the rich rating schema.
+		if ( empty( $schema['address'] ) || ! is_array( $schema['address'] ) || empty( $schema['address']['streetAddress'] ) ) {
+			return;
+		}
+
 		echo '<script type="application/ld+json">' . wp_json_encode( $schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . '</script>' . "\n";
 	}
 
