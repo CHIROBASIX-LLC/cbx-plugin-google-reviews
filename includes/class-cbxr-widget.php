@@ -7,6 +7,9 @@ class CBXR_Widget {
 
 	private static $instance = null;
 
+	/** The repeated-icon <symbol> sprite is emitted at most once per response. */
+	private static $sprite_printed = false;
+
 	public static function instance() {
 		if ( null === self::$instance ) {
 			self::$instance = new self();
@@ -71,6 +74,9 @@ class CBXR_Widget {
 		$badge_style   = 'position:fixed;bottom:20px;z-index:999998;' . ( $is_right ? 'right:20px;' : 'left:20px;' );
 		$panel_style   = 'position:fixed;top:0;bottom:0;width:340px;max-width:92vw;z-index:999999;transition:transform .35s cubic-bezier(.4,0,.2,1);' . ( $is_right ? 'right:0;left:auto;transform:translateX(101%);' : 'left:0;transform:translateX(-101%);' );
 		$overlay_style = 'position:fixed;inset:0;z-index:999997;opacity:0;pointer-events:none;transition:opacity .35s;';
+
+		// Must precede the badge, which is the first thing to reference a star symbol.
+		$this->render_svg_sprite();
 		?>
 		<style id="cbxr-critical-css">
 		/* Critical positioning, inlined so it applies at first paint even when the main stylesheet is
@@ -312,12 +318,7 @@ class CBXR_Widget {
 				<button class="cbxr-read-more">Read more</button>
 			<?php endif; ?>
 			<div class="cbxr-review-source">
-				<svg class="cbxr-google-icon" width="16" height="16" viewBox="0 0 48 48">
-					<path fill="#4285F4" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/>
-					<path fill="#34A853" d="M6.3 14.7l7 5.1C15.2 15.6 19.2 13 24 13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 16.3 2 9.7 6.6 6.3 14.7z"/>
-					<path fill="#FBBC05" d="M24 46c5.4 0 10.3-1.8 14.1-4.9l-6.5-5.5C29.5 37.5 26.9 38.5 24 38.5c-6 0-11.1-4-12.9-9.5l-7 5.4C7.6 41.4 15 46 24 46z"/>
-					<path fill="#EA4335" d="M44.5 20H24v8.5h11.8c-1 3.2-3.1 5.8-5.8 7.6l6.5 5.5C40.2 38.3 46 31.8 46 24c0-1.3-.2-2.7-.5-4z"/>
-				</svg>
+				<svg class="cbxr-google-icon" width="16" height="16" viewBox="0 0 48 48"><use href="#cbxr-sym-google"/></svg>
 				<span class="cbxr-source-label">Posted on</span>
 				<a href="<?php echo esc_url( $url ); ?>" class="cbxr-source-link" target="_blank" rel="noopener noreferrer">Google</a>
 			</div>
@@ -329,13 +330,57 @@ class CBXR_Widget {
 		$output = '';
 		for ( $i = 1; $i <= 5; $i++ ) {
 			if ( $i <= floor( $rating ) ) {
-				$output .= '<svg class="cbxr-star cbxr-star-full" width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="#F4B400"/></svg>';
+				$output .= '<svg class="cbxr-star cbxr-star-full" width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24" fill="#F4B400"><use href="#cbxr-sym-star"/></svg>';
 			} elseif ( $i - $rating < 1 ) {
-				$output .= '<svg class="cbxr-star cbxr-star-half" width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24"><defs><linearGradient id="cbxr-half-' . $i . '"><stop offset="50%" stop-color="#F4B400"/><stop offset="50%" stop-color="#DAD9D6"/></linearGradient></defs><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="url(#cbxr-half-' . $i . ')"/></svg>';
+				$output .= '<svg class="cbxr-star cbxr-star-half" width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24"><use href="#cbxr-sym-star-half"/></svg>';
 			} else {
-				$output .= '<svg class="cbxr-star cbxr-star-empty" width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="#DAD9D6"/></svg>';
+				$output .= '<svg class="cbxr-star cbxr-star-empty" width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24" fill="#DAD9D6"><use href="#cbxr-sym-star-empty"/></svg>';
 			}
 		}
 		return $output;
+	}
+
+	/**
+	 * One-time <symbol> sprite for the icons this widget repeats per review.
+	 *
+	 * A practice with 80+ reviews emitted ~840 star SVGs and ~80 Google icons into EVERY page —
+	 * roughly 143KB of duplicated path data per response, for a panel that starts closed. The path
+	 * data is written once here and referenced with <use>, which paints identically.
+	 *
+	 * Notes that matter if this is ever edited:
+	 *  - Printed OUTSIDE #cbxr-widget, so none of the `#cbxr-widget ... svg` sizing rules (which are
+	 *    all !important) can match the sprite itself.
+	 *  - Hidden by being zero-sized and absolutely positioned rather than `display:none`, which keeps
+	 *    <use> resolution reliable across browsers.
+	 *  - The full and empty stars share one geometry symbol and take their colour by inheriting `fill`
+	 *    from the referencing <svg>, so the symbol's path deliberately carries no fill of its own.
+	 *  - The half star keeps its gradient fill on the symbol. There is now a single gradient id; the
+	 *    old markup repeated ids `cbxr-half-1..5` once per card, so every half star on the page was
+	 *    already resolving to the first definition anyway — this renders the same and stops emitting
+	 *    duplicate ids.
+	 */
+	private function render_svg_sprite() {
+		if ( self::$sprite_printed ) {
+			return;
+		}
+		self::$sprite_printed = true;
+
+		$star_path = 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z';
+		?>
+		<svg id="cbxr-svg-sprite" xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
+			<defs>
+				<linearGradient id="cbxr-grad-half"><stop offset="50%" stop-color="#F4B400"/><stop offset="50%" stop-color="#DAD9D6"/></linearGradient>
+			</defs>
+			<symbol id="cbxr-sym-star" viewBox="0 0 24 24"><path d="<?php echo esc_attr( $star_path ); ?>"/></symbol>
+			<symbol id="cbxr-sym-star-empty" viewBox="0 0 24 24"><path d="<?php echo esc_attr( $star_path ); ?>"/></symbol>
+			<symbol id="cbxr-sym-star-half" viewBox="0 0 24 24"><path d="<?php echo esc_attr( $star_path ); ?>" fill="url(#cbxr-grad-half)"/></symbol>
+			<symbol id="cbxr-sym-google" viewBox="0 0 48 48">
+				<path fill="#4285F4" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/>
+				<path fill="#34A853" d="M6.3 14.7l7 5.1C15.2 15.6 19.2 13 24 13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 16.3 2 9.7 6.6 6.3 14.7z"/>
+				<path fill="#FBBC05" d="M24 46c5.4 0 10.3-1.8 14.1-4.9l-6.5-5.5C29.5 37.5 26.9 38.5 24 38.5c-6 0-11.1-4-12.9-9.5l-7 5.4C7.6 41.4 15 46 24 46z"/>
+				<path fill="#EA4335" d="M44.5 20H24v8.5h11.8c-1 3.2-3.1 5.8-5.8 7.6l6.5 5.5C40.2 38.3 46 31.8 46 24c0-1.3-.2-2.7-.5-4z"/>
+			</symbol>
+		</svg>
+		<?php
 	}
 }
