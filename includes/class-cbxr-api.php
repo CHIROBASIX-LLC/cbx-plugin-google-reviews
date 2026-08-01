@@ -285,13 +285,27 @@ class CBXR_API {
 
 		$min_rating = (int) get_option( 'cbxr_min_rating', 4 );
 
-		return array_values(
+		$reviews = array_values(
 			array_filter( $cached, function ( $r ) use ( $min_rating ) {
 				$has_text = ! empty( $r['text'] ) && trim( $r['text'] ) !== '';
 				$rating   = isset( $r['rating'] ) ? (int) $r['rating'] : 0;
 				return $rating >= $min_rating && $has_text;
 			})
 		);
+
+		/*
+		 * Optional per-site cap on how many reviews render into the panel (and its schema).
+		 * The full cached set injects thousands of words of identical boilerplate + Review
+		 * schema into EVERY page; sites fighting content-quality issues can cap it.
+		 * 0 (default) = current behavior, all reviews. Newest first is preserved because
+		 * the cache is already stored newest-first.
+		 */
+		$max = (int) apply_filters( 'cbxr_max_display_reviews', get_option( 'cbxr_max_display', 0 ) );
+		if ( $max > 0 && count( $reviews ) > $max ) {
+			$reviews = array_slice( $reviews, 0, $max );
+		}
+
+		return $reviews;
 	}
 
 	private function review_key( $review ) {
