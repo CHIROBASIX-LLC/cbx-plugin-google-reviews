@@ -491,3 +491,74 @@
 		height: 14px !important;
 	}
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   [cbx_google_reviews] — inline grid variant.
+   The card styles above are scoped to #cbxr-widget (a fixed-position panel), so the
+   inline shortcode needs its own scope. Deliberately inherits the theme's font stack
+   and colours; only layout is specified here.
+   ───────────────────────────────────────────────────────────────────────────── */
+.cbxr-inline { margin: 0 0 1.5rem; }
+.cbxr-inline .cbxr-inline-header { margin: 0 0 .75rem; }
+
+.cbxr-inline-summary {
+	display: flex;
+	align-items: center;
+	gap: .6rem;
+	flex-wrap: wrap;
+	margin: 0 0 1.25rem;
+}
+.cbxr-inline-rating { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+.cbxr-inline-stars { display: inline-flex; gap: 2px; }
+.cbxr-inline-stars svg { width: 22px; height: 22px; }
+.cbxr-inline-count { opacity: .75; }
+
+.cbxr-inline-grid {
+	display: grid;
+	grid-template-columns: repeat(var(--cbxr-cols, 3), minmax(0, 1fr));
+	gap: 1.25rem;
+}
+.cbxr-inline.cbxr-cols-1 .cbxr-inline-grid { --cbxr-cols: 1; }
+.cbxr-inline.cbxr-cols-2 .cbxr-inline-grid { --cbxr-cols: 2; }
+.cbxr-inline.cbxr-cols-3 .cbxr-inline-grid { --cbxr-cols: 3; }
+.cbxr-inline.cbxr-cols-4 .cbxr-inline-grid { --cbxr-cols: 4; }
+
+.cbxr-inline .cbxr-review-card {
+	border: 1px solid rgba(0, 0, 0, .1);
+	border-radius: 10px;
+	padding: 1.1rem 1.2rem;
+	background: #fff;
+	display: flex;
+	flex-direction: column;
+	gap: .6rem;
+}
+.cbxr-inline .cbxr-review-header { display: flex; align-items: center; gap: .65rem; }
+.cbxr-inline .cbxr-review-avatar { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.cbxr-inline .cbxr-avatar-initial { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; }
+.cbxr-inline .cbxr-review-meta { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.cbxr-inline .cbxr-review-author { font-weight: 600; }
+.cbxr-inline .cbxr-review-time { font-size: .82em; opacity: .65; }
+.cbxr-inline .cbxr-review-stars { display: flex; gap: 2px; }
+.cbxr-inline .cbxr-review-stars svg { width: 18px; height: 18px; }
+.cbxr-inline .cbxr-review-text { margin: 0; }
+.cbxr-inline .cbxr-read-more {
+	align-self: flex-start;
+	background: none;
+	border: 0;
+	padding: 0;
+	cursor: pointer;
+	text-decoration: underline;
+	font: inherit;
+	color: inherit;
+	opacity: .8;
+}
+.cbxr-inline .cbxr-review-source { display: flex; align-items: center; gap: .4rem; font-size: .85em; margin-top: auto; }
+.cbxr-inline .cbxr-google-icon { width: 16px; height: 16px; flex-shrink: 0; }
+
+@media (max-width: 1024px) {
+	.cbxr-inline.cbxr-cols-3 .cbxr-inline-grid,
+	.cbxr-inline.cbxr-cols-4 .cbxr-inline-grid { --cbxr-cols: 2; }
+}
+@media (max-width: 640px) {
+	.cbxr-inline .cbxr-inline-grid { --cbxr-cols: 1; }
+}

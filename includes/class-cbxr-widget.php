@@ -20,6 +20,7 @@ class CBXR_Widget {
 	private function __construct() {
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'wp_footer', array( $this, 'render_widget' ) );
+		add_shortcode( 'cbx_google_reviews', array( $this, 'shortcode' ) );
 	}
 
 	public function enqueue_assets() {
@@ -282,6 +283,60 @@ class CBXR_Widget {
 		}
 
 		return ( count( $addr ) > 1 ) ? $addr : $formatted;
+	}
+
+	/**
+	 * [cbx_google_reviews] — renders the cached Google reviews INLINE, as a grid in page
+	 * content, instead of inside the floating slide-out panel. Same card markup and the
+	 * same <symbol> sprite; only the wrapper differs, so it inherits the site's fonts.
+	 *
+	 * Attributes:
+	 *   count   how many reviews to show (default 12; 0 = all available)
+	 *   columns grid columns on desktop (default 3)
+	 *   header  optional heading rendered above the grid
+	 *
+	 * The floating badge/panel is unaffected — both can appear on the same page.
+	 */
+	public function shortcode( $atts ) {
+		$atts = shortcode_atts(
+			array( 'count' => 12, 'columns' => 3, 'header' => '' ),
+			$atts,
+			'cbx_google_reviews'
+		);
+
+		$api     = new CBXR_API();
+		$reviews = $api->get_display_reviews();
+		if ( empty( $reviews ) ) {
+			return '';
+		}
+		$count = (int) $atts['count'];
+		if ( $count > 0 ) {
+			$reviews = array_slice( $reviews, 0, $count );
+		}
+		$cols   = max( 1, min( 4, (int) $atts['columns'] ) );
+		$rating = get_option( 'cbxr_rating', '5.0' );
+		$total  = get_option( 'cbxr_review_count', '0' );
+
+		ob_start();
+		$this->render_svg_sprite();
+		?>
+		<div class="cbxr-inline cbxr-cols-<?php echo (int) $cols; ?>">
+			<?php if ( '' !== $atts['header'] ) : ?>
+				<h2 class="cbxr-inline-header"><?php echo esc_html( $atts['header'] ); ?></h2>
+			<?php endif; ?>
+			<div class="cbxr-inline-summary">
+				<span class="cbxr-inline-rating"><?php echo esc_html( number_format( (float) $rating, 1 ) ); ?></span>
+				<span class="cbxr-inline-stars"><?php echo $this->render_stars( (float) $rating, 22 ); ?></span>
+				<span class="cbxr-inline-count"><?php echo esc_html( $total ); ?> Google reviews</span>
+			</div>
+			<div class="cbxr-inline-grid">
+				<?php foreach ( $reviews as $review ) : ?>
+					<?php $this->render_review_card( $review ); ?>
+				<?php endforeach; ?>
+			</div>
+		</div>
+		<?php
+		return ob_get_clean();
 	}
 
 	private function render_review_card( $review ) {
