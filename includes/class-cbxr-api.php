@@ -276,7 +276,11 @@ class CBXR_API {
 		delete_option( 'cbxr_last_error' );
 	}
 
-	public function get_display_reviews() {
+	/**
+	 * @param int $default_max Cap used when the site sets none: the panel passes CBXR_DEFAULT_MAX_DISPLAY (200);
+	 *                         0 = no default cap (the [cbx_google_reviews] shortcode's count="0" = all).
+	 */
+	public function get_display_reviews( $default_max = 0 ) {
 		$cached = get_option( 'cbxr_cached_reviews', array() );
 
 		if ( ! is_array( $cached ) ) {
@@ -294,18 +298,27 @@ class CBXR_API {
 		);
 
 		/*
-		 * Optional per-site cap on how many reviews render into the panel (and its schema).
-		 * The full cached set injects thousands of words of identical boilerplate + Review
-		 * schema into EVERY page; sites fighting content-quality issues can cap it.
-		 * 0 (default) = current behavior, all reviews. Newest first is preserved because
-		 * the cache is already stored newest-first.
+		 * How many reviews the panel can show in total (newest first: the cache is stored newest-first).
+		 * Option cbxr_max_display (empty/0 = $default_max: 200 for the panel) or the
+		 * cbxr_max_display_reviews filter; a filter returning 0 shows every cached review.
+		 * Only the first CBXR_DEFAULT_PANEL_INITIAL of these are printed into the page itself; the
+		 * rest are fetched when the visitor opens the panel (see CBXR_Widget::rest_cards()).
 		 */
-		$max = (int) apply_filters( 'cbxr_max_display_reviews', get_option( 'cbxr_max_display', 0 ) );
+		$max = (int) get_option( 'cbxr_max_display', 0 );
+		if ( $max <= 0 ) {
+			$max = (int) $default_max;
+		}
+		$max = (int) apply_filters( 'cbxr_max_display_reviews', $max );
 		if ( $max > 0 && count( $reviews ) > $max ) {
 			$reviews = array_slice( $reviews, 0, $max );
 		}
 
 		return $reviews;
+	}
+
+	/** Short stable id of one review (author + time), used to continue the panel after the last printed card. */
+	public static function card_key( $review ) {
+		return substr( md5( ( $review['author_name'] ?? '' ) . '|' . ( $review['time'] ?? '' ) ), 0, 12 );
 	}
 
 	private function review_key( $review ) {

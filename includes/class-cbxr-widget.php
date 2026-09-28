@@ -21,6 +21,80 @@ class CBXR_Widget {
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'wp_footer', array( $this, 'render_widget' ) );
 		add_shortcode( 'cbx_google_reviews', array( $this, 'shortcode' ) );
+		add_action( 'rest_api_init', array( $this, 'register_rest' ) );
+	}
+
+	/**
+	 * How many review cards are printed into the page. The rest of the panel (up to 200, see
+	 * panel_reviews()) loads from the REST route below when the panel is about to open, so a practice
+	 * with 200 reviews no longer ships ~200 cards (hundreds of KB) inside every page.
+	 * Option cbxr_panel_initial: empty/0 = CBXR_DEFAULT_PANEL_INITIAL (12); -1 = print every card (the
+	 * pre-1.8 behaviour). Filter cbxr_panel_initial_reviews: a value of 0 or less prints every card.
+	 */
+	public static function panel_initial() {
+		$n = (int) get_option( 'cbxr_panel_initial', 0 );
+		if ( 0 === $n ) {
+			$n = CBXR_DEFAULT_PANEL_INITIAL;
+		}
+		return (int) apply_filters( 'cbxr_panel_initial_reviews', $n );
+	}
+
+	/** The reviews the floating panel shows (newest first, capped at 200 unless the site says otherwise). */
+	private static function panel_reviews() {
+		$api = new CBXR_API();
+		return $api->get_display_reviews( CBXR_DEFAULT_MAX_DISPLAY );
+	}
+
+	/** Fingerprint of the exact list + settings: changes the "more" URL whenever anything shown changes. */
+	private static function cards_version( $reviews ) {
+		return substr( md5( implode( ',', array_map( array( 'CBXR_API', 'card_key' ), $reviews ) ) . '|' . self::panel_initial() . '|' . CBXR_VERSION ), 0, 10 );
+	}
+
+	public function register_rest() {
+		register_rest_route(
+			'cbxr/v1',
+			'/cards',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this, 'rest_cards' ),
+				'permission_callback' => '__return_true', // public: returns exactly what the panel shows anyone
+				'args'                => array(
+					'after' => array( 'default' => '', 'sanitize_callback' => 'sanitize_key' ),
+					'n'     => array( 'default' => 0, 'sanitize_callback' => 'absint' ),
+				),
+			)
+		);
+	}
+
+	/**
+	 * GET /wp-json/cbxr/v1/cards?after=KEY&n=TOTAL&v=HASH  ->  { html, count, replace }
+	 * The cards that follow the last card the page printed (KEY), rendered by the same
+	 * render_review_card() as the page so they look identical (they use the page's <symbol> sprite).
+	 * Anchoring on the last printed card, not a position, keeps a cached page consistent after the
+	 * twice-daily refresh adds reviews at the top. If that card is gone, the whole list comes back with
+	 * replace=true and the script swaps the list. n = how many cards the page's own list had (honours
+	 * page-only caps). Nothing is served when the widget is switched off (no Place ID).
+	 */
+	public function rest_cards( $request ) {
+		if ( '' === (string) get_option( 'cbxr_place_id', '' ) ) {
+			return new WP_REST_Response( array( 'html' => '', 'count' => 0, 'replace' => false ) );
+		}
+		$all     = self::panel_reviews();
+		$keys    = array_map( array( 'CBXR_API', 'card_key' ), $all );
+		$pos     = ( '' !== $request['after'] ) ? array_search( $request['after'], $keys, true ) : false;
+		$replace = ( false === $pos );
+		$reviews = $replace ? $all : array_slice( $all, $pos + 1 );
+		$n       = (int) $request['n'];
+		if ( $n > 0 ) {
+			$reviews = array_slice( $reviews, 0, $replace ? $n : max( 0, $n - ( $pos + 1 ) ) );
+		}
+		ob_start();
+		foreach ( $reviews as $review ) {
+			$this->render_review_card( $review );
+		}
+		$response = new WP_REST_Response( array( 'html' => ob_get_clean(), 'count' => count( $reviews ), 'replace' => $replace ) );
+		$response->header( 'Cache-Control', 'public, max-age=3600' );
+		return $response;
 	}
 
 	public function enqueue_assets() {
@@ -47,8 +121,7 @@ class CBXR_Widget {
 			return;
 		}
 
-		$api     = new CBXR_API();
-		$reviews = $api->get_display_reviews();
+		$reviews = self::panel_reviews();
 		$rating  = get_option( 'cbxr_rating', '5.0' );
 		$count   = get_option( 'cbxr_review_count', '0' );
 		$name    = get_option( 'cbxr_place_name', '' );
@@ -60,6 +133,8 @@ class CBXR_Widget {
 		$accent_color = get_option( 'cbxr_accent_color', '#ffffff' );
 
 		$review_url = $url ? $url : 'https://search.google.com/local/writereview?placeid=' . urlencode( $place_id );
+		// "See all reviews" fallback (lazy load failed): the listing, never the write-a-review form.
+		$all_reviews_url = $url ? $url : 'https://search.google.com/local/reviews?placeid=' . rawurlencode( $place_id );
 
 		if ( empty( $reviews ) && empty( $rating ) ) {
 			return;
@@ -133,10 +208,22 @@ class CBXR_Widget {
 						</a>
 					</div>
 
+					<?php
+					$initial = self::panel_initial();
+					$shown   = ( $initial > 0 ) ? array_slice( $reviews, 0, $initial ) : $reviews;
+					$rest    = count( $reviews ) - count( $shown );
+					?>
 					<div class="cbxr-reviews-list">
-						<?php foreach ( $reviews as $review ) : ?>
+						<?php foreach ( $shown as $review ) : ?>
 							<?php $this->render_review_card( $review ); ?>
 						<?php endforeach; ?>
+						<?php if ( $rest > 0 ) : ?>
+							<div class="cbxr-more" role="status" aria-live="polite"
+								data-cbxr-src="<?php echo esc_url( add_query_arg( array( 'after' => CBXR_API::card_key( end( $shown ) ), 'n' => count( $reviews ), 'v' => self::cards_version( $reviews ) ), rest_url( 'cbxr/v1/cards' ) ) ); ?>"
+								data-cbxr-fallback="<?php echo esc_url( $all_reviews_url ); ?>">
+								<span class="cbxr-more-text">Loading more reviews&hellip;</span>
+							</div>
+						<?php endif; ?>
 					</div>
 
 				</div>
@@ -145,7 +232,11 @@ class CBXR_Widget {
 			<div id="cbxr-overlay" class="cbxr-overlay" style="<?php echo esc_attr( $overlay_style ); ?>"></div>
 		</div>
 		<?php
-		$this->render_schema( $name, $rating, $count, $url, $place_id, $reviews );
+		// Review objects only for the cards printed into the page (the aggregate rating still carries the
+		// full count). Filter cbxr_schema_review_limit to change it; 0 = all.
+		$schema_limit   = (int) apply_filters( 'cbxr_schema_review_limit', $initial );
+		$schema_reviews = ( $schema_limit > 0 ) ? array_slice( $reviews, 0, $schema_limit ) : $reviews;
+		$this->render_schema( $name, $rating, $count, $url, $place_id, $schema_reviews );
 	}
 
 	private function render_schema( $name, $rating, $count, $url, $place_id, $reviews ) {
@@ -305,7 +396,7 @@ class CBXR_Widget {
 		);
 
 		$api     = new CBXR_API();
-		$reviews = $api->get_display_reviews();
+		$reviews = $api->get_display_reviews(); // no default cap here: count="0" still means every review
 		if ( empty( $reviews ) ) {
 			return '';
 		}
@@ -352,7 +443,7 @@ class CBXR_Widget {
 		$color_index = abs( crc32( $author ) ) % count( $colors );
 		$bg_color = $colors[ $color_index ];
 		?>
-		<div class="cbxr-review-card">
+		<div class="cbxr-review-card" data-k="<?php echo esc_attr( CBXR_API::card_key( $review ) ); ?>">
 			<div class="cbxr-review-header">
 				<?php if ( $avatar ) : ?>
 					<img class="cbxr-review-avatar" src="<?php echo esc_url( $avatar ); ?>"

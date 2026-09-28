@@ -407,6 +407,28 @@
 	text-decoration: underline !important;
 }
 
+/* "Loading more reviews..." line (the rest of the reviews load when the panel opens) */
+#cbxr-widget .cbxr-more {
+	display: block !important;
+	padding: 16px 20px 24px !important;
+	text-align: center !important;
+}
+
+#cbxr-widget .cbxr-more-text {
+	font-size: 13px !important;
+	color: #666 !important;
+}
+
+#cbxr-widget .cbxr-more-link {
+	color: #4285F4 !important;
+	text-decoration: none !important;
+	font-weight: 600 !important;
+}
+
+#cbxr-widget .cbxr-more-link:hover {
+	text-decoration: underline !important;
+}
+
 /* Source line */
 #cbxr-widget .cbxr-review-source {
 	display: flex !important;
