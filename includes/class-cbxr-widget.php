@@ -360,8 +360,16 @@ class CBXR_Widget {
 		if ( $parts && preg_match( '/^(USA|United States|US)$/i', end( $parts ) ) ) {
 			$addr['addressCountry'] = 'US';
 			array_pop( $parts );
+		} elseif ( $parts && preg_match( '/^Canada$/i', end( $parts ) ) ) {
+			// "1234 Bank St, Ottawa, ON K1S 3Y5, Canada": without this the city came out as "Canada".
+			$addr['addressCountry'] = 'CA';
+			array_pop( $parts );
 		}
-		if ( $parts && preg_match( '/^([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/', end( $parts ), $m ) ) {
+		if ( $parts && preg_match( '/^([A-Za-z]{2})\s+([A-Za-z]\d[A-Za-z]\s?\d[A-Za-z]\d)$/', end( $parts ), $m ) ) {
+			$addr['addressRegion'] = strtoupper( $m[1] );
+			$addr['postalCode']    = strtoupper( $m[2] );
+			array_pop( $parts );
+		} elseif ( $parts && preg_match( '/^([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/', end( $parts ), $m ) ) {
 			$addr['addressRegion'] = strtoupper( $m[1] );
 			$addr['postalCode']    = $m[2];
 			array_pop( $parts );
