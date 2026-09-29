@@ -124,7 +124,7 @@ class CBXR_Widget {
 		$reviews = self::panel_reviews();
 		$rating  = get_option( 'cbxr_rating', '5.0' );
 		$count   = get_option( 'cbxr_review_count', '0' );
-		$name    = get_option( 'cbxr_place_name', '' );
+		$name    = self::business_name();
 		$url     = get_option( 'cbxr_place_url', '' );
 
 		$position     = get_option( 'cbxr_widget_position', 'bottom-left' );
@@ -237,6 +237,21 @@ class CBXR_Widget {
 		$schema_limit   = (int) apply_filters( 'cbxr_schema_review_limit', $initial );
 		$schema_reviews = ( $schema_limit > 0 ) ? array_slice( $reviews, 0, $schema_limit ) : $reviews;
 		$this->render_schema( $name, $rating, $count, $url, $place_id, $schema_reviews );
+	}
+
+	/**
+	 * Business name for the review schema: the site's Company Info name (the practice's source of truth) when it
+	 * is set and is not template text, else the Google listing name. A Google profile can carry a typo or an old
+	 * name (Green Lake's listing says "Chiropratic"); the site should still name itself consistently.
+	 * Filter: cbxr_business_name.
+	 */
+	public static function business_name() {
+		$google = (string) get_option( 'cbxr_place_name', '' );
+		$site   = trim( preg_replace( '/\s+/', ' ', wp_strip_all_tags( (string) get_option( 'options_company_name', '' ) ) ) );
+		if ( '' === $site || preg_match( '/ABC Chiropractic|\[acf/i', $site ) ) {
+			$site = '';
+		}
+		return (string) apply_filters( 'cbxr_business_name', '' !== $site ? html_entity_decode( $site, ENT_QUOTES, 'UTF-8' ) : $google, $google );
 	}
 
 	private function render_schema( $name, $rating, $count, $url, $place_id, $reviews ) {
