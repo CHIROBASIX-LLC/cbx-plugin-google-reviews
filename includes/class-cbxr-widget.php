@@ -233,7 +233,9 @@ class CBXR_Widget {
 		</div>
 		<?php
 		// Review objects only for the cards printed into the page (the aggregate rating still carries the
-		// full count). Filter cbxr_schema_review_limit to change it; 0 = all.
+		// full count). Filter cbxr_schema_review_limit to change it; 0 = all. Since 1.9.0 these only feed the
+		// cbxr_schema filter (same input as before, so site callbacks behave the same); render_schema()
+		// removes every rating and review before it prints the business block.
 		$schema_limit   = (int) apply_filters( 'cbxr_schema_review_limit', $initial );
 		$schema_reviews = ( $schema_limit > 0 ) ? array_slice( $reviews, 0, $schema_limit ) : $reviews;
 		$this->render_schema( $name, $rating, $count, $url, $place_id, $schema_reviews );
@@ -272,8 +274,8 @@ class CBXR_Widget {
 			),
 		);
 
-		// Business identity fields — Google requires `address` on any LocalBusiness that carries
-		// ratings/reviews; without it the item is flagged invalid. NAP persisted from Place Details.
+		// Business identity fields: NAP persisted from Place Details. The block prints only when it has a
+		// street address (see the check after the cbxr_schema filter below).
 		$address = get_option( 'cbxr_place_address', '' );
 		if ( ! empty( $address ) ) {
 			$schema['address'] = $this->parse_postal_address( $address );
@@ -344,21 +346,65 @@ class CBXR_Widget {
 
 		/**
 		 * Filter the reviews-widget LocalBusiness schema before output.
+		 * Since 1.9.0 the array still arrives with aggregateRating and review (same input as 1.8.2), but both
+		 * are removed from whatever the filter returns, before printing. Return an empty array to print nothing.
 		 *
 		 * @param array  $schema   Assembled schema array.
 		 * @param string $place_id Google place id.
 		 */
 		$schema = apply_filters( 'cbxr_schema', $schema, $place_id );
 
-		// Google/SEMRush flag a LocalBusiness carrying a rating but no address as INVALID. If a valid
-		// address is not available (e.g. Place Details NAP not yet persisted, or cleared during a
-		// refresh gap), skip the schema entirely rather than emit an invalid item. A site can supply
-		// an address via the `cbxr_schema` filter above to keep the rich rating schema.
-		if ( empty( $schema['address'] ) || ! is_array( $schema['address'] ) || empty( $schema['address']['streetAddress'] ) ) {
+		// 1.9.0: no star ratings and no reviews in structured data. Google treats a business's own reviews
+		// shown on its own site as self-serving, and CHIROBASIX's rule since 2026-10-02 keeps reviews as
+		// visible page content only. Removed AFTER the filter, so nothing a site callback returns can put
+		// them back; the business details (name, address, phone, geo, image, priceRange, url, and anything
+		// a callback sets, such as @type MedicalClinic and @id) print exactly as before.
+		$schema = self::strip_rating_markup( $schema );
+
+		// Print nothing without a street address (unchanged since 1.5.5; a site can supply one through the
+		// cbxr_schema filter, or return an empty array to drop the block).
+		if ( empty( $schema['address'] ) || ! is_array( $schema['address'] ) || empty( $schema['address']['streetAddress'] ) || self::is_rating_node( $schema ) ) {
 			return;
 		}
 
 		echo '<script type="application/ld+json">' . wp_json_encode( $schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . '</script>' . "\n";
+	}
+
+	/**
+	 * Remove star-rating and review markup at any depth: the aggregateRating, review and reviews properties,
+	 * and any node typed Review (or a Review subtype) or AggregateRating. Everything else, and its order, is
+	 * kept. Lists stay lists.
+	 *
+	 * @param mixed $node Schema array (or any value a cbxr_schema callback returned).
+	 * @return mixed
+	 */
+	private static function strip_rating_markup( $node ) {
+		if ( ! is_array( $node ) ) {
+			return $node;
+		}
+		$is_list = ( array() === $node ) || ( array_keys( $node ) === range( 0, count( $node ) - 1 ) );
+		unset( $node['aggregateRating'], $node['review'], $node['reviews'] );
+		foreach ( $node as $key => $value ) {
+			if ( self::is_rating_node( $value ) ) {
+				unset( $node[ $key ] );
+			} else {
+				$node[ $key ] = self::strip_rating_markup( $value );
+			}
+		}
+		return $is_list ? array_values( $node ) : $node;
+	}
+
+	/** True for a node whose @type is Review, a Review subtype (UserReview, CriticReview ...) or AggregateRating. */
+	private static function is_rating_node( $node ) {
+		if ( ! is_array( $node ) || ! isset( $node['@type'] ) ) {
+			return false;
+		}
+		foreach ( (array) $node['@type'] as $type ) {
+			if ( is_string( $type ) && preg_match( '/(Review|AggregateRating)$/', $type ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
