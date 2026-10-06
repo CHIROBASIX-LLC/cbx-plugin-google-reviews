@@ -124,6 +124,7 @@ class CBXR_Widget {
 		$reviews = self::panel_reviews();
 		$rating  = get_option( 'cbxr_rating', '5.0' );
 		$count   = get_option( 'cbxr_review_count', '0' );
+		$name    = self::business_name();
 		$url     = get_option( 'cbxr_place_url', '' );
 
 		$position     = get_option( 'cbxr_widget_position', 'bottom-left' );
@@ -231,11 +232,217 @@ class CBXR_Widget {
 			<div id="cbxr-overlay" class="cbxr-overlay" style="<?php echo esc_attr( $overlay_style ); ?>"></div>
 		</div>
 		<?php
-		// No structured data. Since 1.9.0 the widget prints no JSON-LD: no LocalBusiness node, no
-		// aggregateRating, no Review. Google treats a business's reviews of itself on its own site as
-		// self-serving (not eligible for star rich results), and CHIROBASIX's rule since 2026-10-02 is
-		// reviews as visible page content only. The old cbxr_schema / cbxr_schema_review_limit /
-		// cbxr_business_name filters no longer fire; site code that hooks them is harmless.
+		// Review objects only for the cards printed into the page (the aggregate rating still carries the
+		// full count). Filter cbxr_schema_review_limit to change it; 0 = all. Since 1.9.0 these only feed the
+		// cbxr_schema filter (same input as before, so site callbacks behave the same); render_schema()
+		// removes every rating and review before it prints the business block.
+		$schema_limit   = (int) apply_filters( 'cbxr_schema_review_limit', $initial );
+		$schema_reviews = ( $schema_limit > 0 ) ? array_slice( $reviews, 0, $schema_limit ) : $reviews;
+		$this->render_schema( $name, $rating, $count, $url, $place_id, $schema_reviews );
+	}
+
+	/**
+	 * Business name for the review schema: the site's Company Info name (the practice's source of truth) when it
+	 * is set and is not template text, else the Google listing name. A Google profile can carry a typo or an old
+	 * name (Green Lake's listing says "Chiropratic"); the site should still name itself consistently.
+	 * Filter: cbxr_business_name.
+	 */
+	public static function business_name() {
+		$google = (string) get_option( 'cbxr_place_name', '' );
+		$site   = trim( preg_replace( '/\s+/', ' ', wp_strip_all_tags( (string) get_option( 'options_company_name', '' ) ) ) );
+		if ( '' === $site || preg_match( '/ABC Chiropractic|\[acf/i', $site ) ) {
+			$site = '';
+		}
+		return (string) apply_filters( 'cbxr_business_name', '' !== $site ? html_entity_decode( $site, ENT_QUOTES, 'UTF-8' ) : $google, $google );
+	}
+
+	private function render_schema( $name, $rating, $count, $url, $place_id, $reviews ) {
+		if ( empty( $name ) || empty( $rating ) ) {
+			return;
+		}
+
+		$schema = array(
+			'@context'       => 'https://schema.org',
+			'@type'          => 'LocalBusiness',
+			'name'           => $name,
+			'aggregateRating' => array(
+				'@type'       => 'AggregateRating',
+				'ratingValue' => number_format( (float) $rating, 1 ),
+				'bestRating'  => '5',
+				'worstRating' => '1',
+				'reviewCount' => (int) $count,
+			),
+		);
+
+		// Business identity fields: NAP persisted from Place Details. The block prints only when it has a
+		// street address (see the check after the cbxr_schema filter below).
+		$address = get_option( 'cbxr_place_address', '' );
+		if ( ! empty( $address ) ) {
+			$schema['address'] = $this->parse_postal_address( $address );
+		}
+		$telephone = get_option( 'cbxr_place_phone', '' );
+		if ( ! empty( $telephone ) ) {
+			$schema['telephone'] = $telephone;
+		}
+		$geo = get_option( 'cbxr_place_geo', '' );
+		if ( ! empty( $geo ) && false !== strpos( $geo, ',' ) ) {
+			list( $lat, $lng ) = array_map( 'trim', explode( ',', $geo, 2 ) );
+			if ( '' !== $lat && '' !== $lng ) {
+				$schema['geo'] = array(
+					'@type'     => 'GeoCoordinates',
+					'latitude'  => $lat,
+					'longitude' => $lng,
+				);
+			}
+		}
+		$image = get_option( 'cbxr_place_image', '' );
+		if ( empty( $image ) && function_exists( 'get_site_icon_url' ) ) {
+			$image = get_site_icon_url( 512 );
+		}
+		if ( ! empty( $image ) ) {
+			$schema['image'] = $image;
+		}
+		$price_range = get_option( 'cbxr_price_range', '$$' );
+		if ( ! empty( $price_range ) ) {
+			$schema['priceRange'] = $price_range;
+		}
+
+		// Prefer the business's own website for `url`; fall back to the Google Maps URL.
+		$site_url = home_url( '/' );
+		if ( ! empty( $site_url ) ) {
+			$schema['url'] = $site_url;
+		} elseif ( ! empty( $url ) ) {
+			$schema['url'] = $url;
+		}
+
+		if ( ! empty( $reviews ) ) {
+			$schema['review'] = array();
+			foreach ( $reviews as $review ) {
+				$r = array(
+					'@type'        => 'Review',
+					'author'       => array(
+						'@type' => 'Person',
+						'name'  => isset( $review['author_name'] ) ? $review['author_name'] : 'Anonymous',
+					),
+					'reviewRating' => array(
+						'@type'      => 'Rating',
+						'ratingValue' => isset( $review['rating'] ) ? (int) $review['rating'] : 5,
+						'bestRating'  => '5',
+						'worstRating' => '1',
+					),
+				);
+
+				if ( ! empty( $review['text'] ) ) {
+					$r['reviewBody'] = $review['text'];
+				}
+
+				if ( ! empty( $review['time'] ) ) {
+					$r['datePublished'] = gmdate( 'Y-m-d', (int) $review['time'] );
+				}
+
+				$schema['review'][] = $r;
+			}
+		}
+
+		/**
+		 * Filter the reviews-widget LocalBusiness schema before output.
+		 * Since 1.9.0 the array still arrives with aggregateRating and review (same input as 1.8.2), but both
+		 * are removed from whatever the filter returns, before printing. Return an empty array to print nothing.
+		 *
+		 * @param array  $schema   Assembled schema array.
+		 * @param string $place_id Google place id.
+		 */
+		$schema = apply_filters( 'cbxr_schema', $schema, $place_id );
+
+		// 1.9.0: no star ratings and no reviews in structured data. Google treats a business's own reviews
+		// shown on its own site as self-serving, and CHIROBASIX's rule since 2026-10-02 keeps reviews as
+		// visible page content only. Removed AFTER the filter, so nothing a site callback returns can put
+		// them back; the business details (name, address, phone, geo, image, priceRange, url, and anything
+		// a callback sets, such as @type MedicalClinic and @id) print exactly as before.
+		$schema = self::strip_rating_markup( $schema );
+
+		// Print nothing without a street address (unchanged since 1.5.5; a site can supply one through the
+		// cbxr_schema filter, or return an empty array to drop the block).
+		if ( empty( $schema['address'] ) || ! is_array( $schema['address'] ) || empty( $schema['address']['streetAddress'] ) || self::is_rating_node( $schema ) ) {
+			return;
+		}
+
+		echo '<script type="application/ld+json">' . wp_json_encode( $schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . '</script>' . "\n";
+	}
+
+	/**
+	 * Remove star-rating and review markup at any depth: the aggregateRating, review and reviews properties,
+	 * and any node typed Review (or a Review subtype) or AggregateRating. Everything else, and its order, is
+	 * kept. Lists stay lists.
+	 *
+	 * @param mixed $node Schema array (or any value a cbxr_schema callback returned).
+	 * @return mixed
+	 */
+	private static function strip_rating_markup( $node ) {
+		if ( ! is_array( $node ) ) {
+			return $node;
+		}
+		$is_list = ( array() === $node ) || ( array_keys( $node ) === range( 0, count( $node ) - 1 ) );
+		unset( $node['aggregateRating'], $node['review'], $node['reviews'] );
+		foreach ( $node as $key => $value ) {
+			if ( self::is_rating_node( $value ) ) {
+				unset( $node[ $key ] );
+			} else {
+				$node[ $key ] = self::strip_rating_markup( $value );
+			}
+		}
+		return $is_list ? array_values( $node ) : $node;
+	}
+
+	/** True for a node whose @type is Review, a Review subtype (UserReview, CriticReview ...) or AggregateRating. */
+	private static function is_rating_node( $node ) {
+		if ( ! is_array( $node ) || ! isset( $node['@type'] ) ) {
+			return false;
+		}
+		foreach ( (array) $node['@type'] as $type ) {
+			if ( is_string( $type ) && preg_match( '/(Review|AggregateRating)$/', $type ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Parse a Google formatted_address string into a schema.org PostalAddress.
+	 * e.g. "36 14th Ave NE Ste 101, Hickory, NC 28601, USA".
+	 *
+	 * @param string $formatted Formatted address.
+	 * @return array|string PostalAddress array, or the raw string if it can't be parsed.
+	 */
+	private function parse_postal_address( $formatted ) {
+		$parts = array_values( array_filter( array_map( 'trim', explode( ',', $formatted ) ), 'strlen' ) );
+		$addr  = array( '@type' => 'PostalAddress' );
+
+		if ( $parts && preg_match( '/^(USA|United States|US)$/i', end( $parts ) ) ) {
+			$addr['addressCountry'] = 'US';
+			array_pop( $parts );
+		} elseif ( $parts && preg_match( '/^Canada$/i', end( $parts ) ) ) {
+			// "1234 Bank St, Ottawa, ON K1S 3Y5, Canada": without this the city came out as "Canada".
+			$addr['addressCountry'] = 'CA';
+			array_pop( $parts );
+		}
+		if ( $parts && preg_match( '/^([A-Za-z]{2})\s+([A-Za-z]\d[A-Za-z]\s?\d[A-Za-z]\d)$/', end( $parts ), $m ) ) {
+			$addr['addressRegion'] = strtoupper( $m[1] );
+			$addr['postalCode']    = strtoupper( $m[2] );
+			array_pop( $parts );
+		} elseif ( $parts && preg_match( '/^([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/', end( $parts ), $m ) ) {
+			$addr['addressRegion'] = strtoupper( $m[1] );
+			$addr['postalCode']    = $m[2];
+			array_pop( $parts );
+		}
+		if ( $parts ) {
+			$addr['addressLocality'] = array_pop( $parts );
+		}
+		if ( $parts ) {
+			$addr['streetAddress'] = implode( ', ', $parts );
+		}
+
+		return ( count( $addr ) > 1 ) ? $addr : $formatted;
 	}
 
 	/**
