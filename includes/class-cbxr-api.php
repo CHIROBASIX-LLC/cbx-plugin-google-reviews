@@ -233,7 +233,7 @@ class CBXR_API {
 		if ( isset( $result['url'] ) ) {
 			update_option( 'cbxr_place_url', $result['url'] );
 		}
-		// Persist NAP from Place Details so the LocalBusiness schema stays valid (Google requires `address`).
+		// Keep the listing's NAP from Place Details for reference (fleet audits read it). Since 1.9.0 the widget prints no schema.
 		if ( ! empty( $result['formatted_address'] ) ) {
 			update_option( 'cbxr_place_address', $result['formatted_address'] );
 		}
