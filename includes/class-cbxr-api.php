@@ -233,7 +233,9 @@ class CBXR_API {
 		if ( isset( $result['url'] ) ) {
 			update_option( 'cbxr_place_url', $result['url'] );
 		}
-		// Persist NAP from Place Details so the LocalBusiness schema stays valid (Google requires `address`).
+		// Persist NAP from Place Details. render_schema() uses it to build the business node it passes to the
+		// cbxr_schema filter; that node prints only with a street address and, since 1.9.1, only when the site
+		// ties it to its own node (@id) or sets the option cbxr_keep_business_schema.
 		if ( ! empty( $result['formatted_address'] ) ) {
 			update_option( 'cbxr_place_address', $result['formatted_address'] );
 		}
