@@ -235,7 +235,8 @@ class CBXR_Widget {
 		// Review objects only for the cards printed into the page (the aggregate rating still carries the
 		// full count). Filter cbxr_schema_review_limit to change it; 0 = all. Since 1.9.0 these only feed the
 		// cbxr_schema filter (same input as before, so site callbacks behave the same); render_schema()
-		// removes every rating and review before it prints the business block.
+		// removes every rating and review, and since 1.9.1 prints the business block only when the site
+		// asks for it (see the cbxr_print_business_schema gate there).
 		$schema_limit   = (int) apply_filters( 'cbxr_schema_review_limit', $initial );
 		$schema_reviews = ( $schema_limit > 0 ) ? array_slice( $reviews, 0, $schema_limit ) : $reviews;
 		$this->render_schema( $name, $rating, $count, $url, $place_id, $schema_reviews );
@@ -275,7 +276,8 @@ class CBXR_Widget {
 		);
 
 		// Business identity fields: NAP persisted from Place Details. The block prints only when it has a
-		// street address (see the check after the cbxr_schema filter below).
+		// street address and, since 1.9.1, only when the site asks for it (see the checks after the
+		// cbxr_schema filter below).
 		$address = get_option( 'cbxr_place_address', '' );
 		if ( ! empty( $address ) ) {
 			$schema['address'] = $this->parse_postal_address( $address );
@@ -349,6 +351,11 @@ class CBXR_Widget {
 		 * Since 1.9.0 the array still arrives with aggregateRating and review (same input as 1.8.2), but both
 		 * are removed from whatever the filter returns, before printing. Return an empty array to print nothing.
 		 *
+		 * Since 1.9.1 the block prints only when the returned node carries a non-empty string `@id` (the
+		 * callback has tied it to the site's own business node, as Peak Health does with #business), or the
+		 * site option `cbxr_keep_business_schema` is true, or the cbxr_print_business_schema filter says so.
+		 * Changing other fields here without setting `@id` no longer makes the block print.
+		 *
 		 * @param array  $schema   Assembled schema array.
 		 * @param string $place_id Google place id.
 		 */
@@ -357,13 +364,36 @@ class CBXR_Widget {
 		// 1.9.0: no star ratings and no reviews in structured data. Google treats a business's own reviews
 		// shown on its own site as self-serving, and CHIROBASIX's rule since 2026-10-02 keeps reviews as
 		// visible page content only. Removed AFTER the filter, so nothing a site callback returns can put
-		// them back; the business details (name, address, phone, geo, image, priceRange, url, and anything
-		// a callback sets, such as @type MedicalClinic and @id) print exactly as before.
+		// them back. When the block prints, the business details (name, address, phone, geo, image,
+		// priceRange, url, and anything a callback sets, such as @type MedicalClinic and @id) print exactly
+		// as 1.9.0 printed them; whether it prints at all is decided by the 1.9.1 gate below.
 		$schema = self::strip_rating_markup( $schema );
 
 		// Print nothing without a street address (unchanged since 1.5.5; a site can supply one through the
 		// cbxr_schema filter, or return an empty array to drop the block).
 		if ( empty( $schema['address'] ) || ! is_array( $schema['address'] ) || empty( $schema['address']['streetAddress'] ) || self::is_rating_node( $schema ) ) {
+			return;
+		}
+
+		// 1.9.1: one business entry per office. The site's own SEO plugin or theme already prints the
+		// office's business node, so by default this block is not printed (it was a second, unlinked
+		// LocalBusiness entry). It still prints when a cbxr_schema callback has tied it to the site's own
+		// node with an @id, or when the site opts in with the option cbxr_keep_business_schema (for sites
+		// whose own node has no street address yet; it is also a per-site rollback to 1.9.0 output).
+		$print = ( isset( $schema['@id'] ) && is_string( $schema['@id'] ) && '' !== trim( $schema['@id'] ) )
+			|| wp_validate_boolean( get_option( 'cbxr_keep_business_schema', false ) );
+
+		/**
+		 * Whether to print the reviews-widget business block.
+		 *
+		 * @since 1.9.1
+		 *
+		 * @param bool   $print    True when the node has a non-empty string @id or the option
+		 *                         cbxr_keep_business_schema is true.
+		 * @param array  $schema   The node that would print (ratings and reviews already removed).
+		 * @param string $place_id Google place id.
+		 */
+		if ( ! apply_filters( 'cbxr_print_business_schema', $print, $schema, $place_id ) ) {
 			return;
 		}
 
